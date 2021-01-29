@@ -1,0 +1,48 @@
+CarND-Path-Planning-Project-P1
+Udacity Self-Driving Car Nanodegree - Path Planning Project
+
+Goal
+
+In this project your goal is to safely navigate around a virtual highway with other traffic that is driving +-10 MPH of the 50 MPH speed limit. You will be provided the car's localization and sensor fusion data, there is also a sparse map list of waypoints around the highway. The car should try to go as close as possible to the 50 MPH speed limit, which means passing slower traffic when possible, note that other cars will try to change lanes too. The car should avoid hitting other cars at all cost as well as driving inside of the marked road lanes at all times, unless going from one lane to another. The car should be able to make one complete loop around the 6946m highway. Since the car is trying to go 50 MPH, it should take a little over 5 minutes to complete 1 loop. Also the car should not experience total acceleration over 10 m/s^2 and jerk that is greater than 10 m/s^3.
+
+
+Reflection
+
+Three processes are happening over here one by one in the code. 
+1. Prediction
+2. Behaviour Planning
+3. Trajectory Planning
+
+
+1. Prediction: 
+
+The sensor fusion data provided details about all the other traffic vehicles on the road. This data was used to achieve the following tasks within various parts of the code as an when required: 
+
+· Predicting future positions of all the vehicles by implementing a basic constant velocity kinematic velocity model
+· Finding vehicle in front of ego vehicle in the same lane within some threshold distance
+· Checking if vehicles are present on either side of ego vehicle when it intends to change lanes. This is done by taking the future position of ego vehicle when it would want to change lane, then using kinematic models, an approximate position of each traffic vehicle is obtained. Then a gap threshold is applied on front and back side of ego vehicle’s future position in the desired lane to check if there is enough space to make the change
+
+
+2. Behaviour Planner: 
+
+The goal of this module is to output the lane in which we want our ego vehicle to be. It could be a new lane or the same lane in which it is currently moving in. 
+
+· First, we check for a condition where a car is in front of the ego vehicle and is too close to the ego vehicle which hinders the speed of our ego vehicle 
+· Then we evaluate the possible lane options for each lane in which the ego could be present in
+· Then we see which direction is feasible to move towards. If there is a car on the right side of the ego when it intends to change lane, the “right” direction is not considered as an option. Then we just consider left lane and the current (if let’s say the vehicle is moving in the middle lane)
+· Then after filtering lanes, we calculate the cost for each lane. The cost is a function of the distance of ego with the vehicle in front of it. If the vehicle is far away, the lane will be more favourable then the one which has the vehicle in front closer
+· We finalise the lane which has the minimum cost and then pass it to the trajectory planner
+· We also modify the velocity of the ego on a case to case basis. If it is too low and there are no restrictions, we speed up. If there is a car ahead and we can’t change lanes, we slow down
+
+
+3. Trajectory Planner
+
+This part of the code takes the reference velocity of the car (at which we want to drive our ego vehicle) and the lane in which we want to keep our ego vehicle. 
+
+· We start with the past path point that the car is supposed to walk on 
+· If the number of points is less than 50, we can append new points to our path 
+· To start the spine initialization process, we consider last two points from the previous path (for continuity purposes) and 3 points in the desired lane which is 30, 60, 90 meters apart from the end point of the previous path.
+· We use a math trick in the above point by transforming and rotating all point to align our axes with the ego vehicle’s frame of reference. Homogeneous transformations are used for the same. 
+· Once we are in the local car’s coordinates, we fit the spline with the above 5 points. 
+· Then we select the required number of points (to complete a figure of 50) from the new spline we just created. While picking the spline, the spacing of the points is chosen such that the ego vehicle can move at desired velocity.
+· Finally, we transform the points back to map coordinate frame and feed the new points to the simulator

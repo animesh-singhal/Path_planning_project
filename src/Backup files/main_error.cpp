@@ -13,9 +13,6 @@
 using nlohmann::json;
 using std::string;
 using std::vector;
-using std::cout;
-using std::endl;
-
 
 int main() {
   uWS::Hub h;
@@ -53,19 +50,20 @@ int main() {
     map_waypoints_dx.push_back(d_x);
     map_waypoints_dy.push_back(d_y);
   }
+ 
+  // ----DEFINING VARIABLE
   
-  // car starts in lane 1 (lane numbers: 0,1,2. So middle lane would be 1)
+  //start in lane 1
   int lane = 1; 
+  
+  // Have a reference velocity to target
+  double ref_vel = 49.5; //mph
+  
+  // ----END OF DECLARATIONS
+ 
 
-  double ref_vel = 0; //mph
-  
-  bool lane_change_last_time = false;
-   
-  //Note: After declaring these variables, we've added them in h.onMessage (notice &ref_vel, &lane)
-  
-  
-  h.onMessage([&ref_vel, &map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
-               &map_waypoints_dx,&map_waypoints_dy, &lane, &lane_change_last_time]
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
+               &map_waypoints_dx,&map_waypoints_dy]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -101,92 +99,14 @@ int main() {
           // Sensor Fusion Data, a list of all other cars on the same side 
           //   of the road.
           auto sensor_fusion = j[1]["sensor_fusion"];
-
-          // ----DEFINING VARIABLE
           
           //Last path the car was following. Simulator will tell us what the previous path was. 
           int prev_size = previous_path_x.size();
-          
-          // ----END OF DECLARATIONS  
-          
-          
-          json msgJson;
-
-          // Vectors that contains actual (x,y) coordinates in map frame which we'll send to simulator
-          vector<double> next_x_vals;
-          vector<double> next_y_vals;
 
           
-          //////////////////////////////////////////////// START OF CODE TO AVOID COLLISION 
 
-          if(prev_size > 0)
-          {
-            car_s = end_path_s; 
-          }
-          
-          bool too_close = false; 
-          
-          //find ref_vel to use 
-          for(int i =0; i< sensor_fusion.size(); i++)
-          {
-            //car is in my lane
-            float d = sensor_fusion[i][6];
-            if(d < (2+4*lane+2) && d > (2+4*lane-2) )
-            {
-              double vx = sensor_fusion[i][3];
-              double vy = sensor_fusion[i][4];
-              double check_speed = sqrt(vx*vx + vy*vy);
-              double check_car_s = sensor_fusion[i][5];
-              
-              check_car_s+=((double)prev_size*0.02*check_speed); //if using previous points can preoject s value out
-              // check s values greater than mine and s gap 
-              if((check_car_s > car_s) && ((check_car_s-car_s) <30) )
-              {
-                
-                
-                // Do some logic here, lower reference velocity so we don't crash into the car infront of us 
-                // could also flag to try to change lanes
-                //ref_vel = 29.5; //mph
-                too_close = true; 
-                
-                cout<<"Hi we're in the collision test loop\n";
 
-                int new_lane = -1; //randomly intiializing new lane (as 0 corresponds to left lane)
-
-                // behaviour_planner function is defined in helper.h (at the bottom) 
-                if (lane_change_last_time == false){
-                new_lane = behaviour_planner( sensor_fusion, prev_size, lane, car_s, end_path_s);
-                
-                  if (new_lane != lane){
-                   lane = new_lane;
-                   bool lane_change_last_time = true;   
-                  }
-
-                }
-                
-                cout<<"Lane's value"<<lane<<endl<<endl;
-                
-              }
-              
-            }
-          }
-          
-		  // If ego is too close to vhehicle in front & is not changing lane
-          if(too_close && (lane_change_last_time == false))
-          {
-            ref_vel -= .224;
-            //cout<<"ref_vel A"<<ref_vel<<endl;
-          }
-          else if(ref_vel < 49.5)
-          {
-            ref_vel += .224;
-            //cout<<"ref_vel B"<<ref_vel<<endl;
-          }
-          
-          //////////////////////////////////////////////// END OF CODE TO AVOID COLLISION 
-          
-          
-          //////////////////////////////////////////////// START OF CODE TO MOVE IN CAR'S LANE
+		  //////////////////////////////////////////////// START OF TODO CODE
           
           // Create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
           // Later we will interpolate these waypoints with a spline an fill it in with more points that control speed
@@ -201,13 +121,12 @@ int main() {
           double ref_x = car_x;
           double ref_y = car_y;
           double ref_yaw = deg2rad(car_yaw);
-                   
+          
           // The previous path would either be empty or will have some points that we can take advantage of
           
           // if previous size is almost empty(we're just starting out), use the car as starting reference 
           if (prev_size<2) 
           {
-
             //Use two points that make the path tangent to the angle of the car
             double prev_car_x = car_x - cos(car_yaw);  //going backward in time basis angle
             double prev_car_y = car_y - sin(car_yaw);	
@@ -266,7 +185,7 @@ int main() {
             double shift_x = ptsx[i]-ref_x;
             double shift_y = ptsy[i]-ref_y;
             
-            // NOW WE'LL MAKE THE SHIFT IN ROTATION:
+            // NOW WE"LL MAKE THE SHIFT IN ROTATION:
             // Have a look  at homogeneous transformation to understand the code properly
             // Above, we have taken origin to the car coordinates
             // Now we want the align the x and y axis according to the car's yaw angle
@@ -283,19 +202,20 @@ int main() {
           // set (x,y) points to the spline
           s.set_points(ptsx, ptsy);
           
+          // Define the actual (x,y) points we will use for the planner
+          vector<double> next_x_vals;
+          vector<double> next_y_vals; 
           
           // Start with all of the previous path points from the last time
           for (int i=0; i< previous_path_x.size(); i++)
           {
             next_x_vals.push_back(previous_path_x[i]);
             next_y_vals.push_back(previous_path_y[i]);
-            
           }
           
           // Calculate how to break up spline points so that we travel at our desired reference velocity
           double target_x = 30.0;
           double target_y = s(target_x);
-                    
           double target_dist = sqrt((target_x)*(target_x)+(target_y)*(target_y));
           
           double x_add_on = 0;
@@ -316,16 +236,17 @@ int main() {
             
             // rotate back to normal after rotating it earlier
             // This is proper homogeneous transformation:
-            x_point = ref_x + (x_ref *cos(ref_yaw)) - (y_ref *sin(ref_yaw));
-            y_point = ref_y + (x_ref *sin(ref_yaw)) + (y_ref *cos(ref_yaw));
+            x_point = x_ref + (x_ref *cos(ref_yaw)) - (y_ref *sin(ref_yaw));
+            y_point = y_ref + (x_ref *sin(ref_yaw)) + (y_ref *cos(ref_yaw));
           
 			next_x_vals.push_back(x_point);
-            next_y_vals.push_back(y_point);       
-            
+            next_y_vals.push_back(y_point);          
           }
-
-          //////////////////////////////////////////////// START OF CODE TO MOVE IN CAR'S LANE
-		  
+          
+          //////////////////////////////////////////////// END OF TODO CODE
+          
+          json msgJson;
+            
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 

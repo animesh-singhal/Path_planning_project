@@ -58,14 +58,12 @@ int main() {
   int lane = 1; 
 
   double ref_vel = 0; //mph
-  
-  bool lane_change_last_time = false;
    
   //Note: After declaring these variables, we've added them in h.onMessage (notice &ref_vel, &lane)
   
   
   h.onMessage([&ref_vel, &map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
-               &map_waypoints_dx,&map_waypoints_dy, &lane, &lane_change_last_time]
+               &map_waypoints_dx,&map_waypoints_dy, &lane]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -150,29 +148,28 @@ int main() {
                 too_close = true; 
                 
                 cout<<"Hi we're in the collision test loop\n";
-
-                int new_lane = -1; //randomly intiializing new lane (as 0 corresponds to left lane)
-
-                // behaviour_planner function is defined in helper.h (at the bottom) 
-                if (lane_change_last_time == false){
-                new_lane = behaviour_planner( sensor_fusion, prev_size, lane, car_s, end_path_s);
-                
-                  if (new_lane != lane){
-                   lane = new_lane;
-                   bool lane_change_last_time = true;   
-                  }
-
+                /*
+                vector <vector<string>>options = { {"right"}, {"left", "right"}, {"left"} };
+                cout<<"Possible directions: "<<endl;
+                for (int i=0; i<options[lane].size(); i++){
+                  
+                  string direction = options[lane][i];
+                  cout<<"Direction: "<<direction<<endl;
+                  
                 }
+                cout<<endl<<endl;
+                */
                 
+                // behaviour_planner function is defined in helper.h (at the bottom) 
+                lane = behaviour_planner( sensor_fusion, prev_size, lane, end_path_s);
                 cout<<"Lane's value"<<lane<<endl<<endl;
                 
               }
               
             }
           }
-          
-		  // If ego is too close to vhehicle in front & is not changing lane
-          if(too_close && (lane_change_last_time == false))
+		  
+          if(too_close)
           {
             ref_vel -= .224;
             //cout<<"ref_vel A"<<ref_vel<<endl;

@@ -157,13 +157,11 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s,
   return {x,y};
 }
 
-int behaviour_planner( vector<vector<double>> sensor_fusion, int prev_size, int ego_lane, double ego_s, double ego_prev_path_end_s)
-{
+int behaviour_planner( vector<vector<double>> sensor_fusion, int prev_size, int ego_lane, double ego_prev_path_end_s){
   
-  vector <vector<string>>options = { {"straight", "right"}, {"left", "straight", "right"}, {"left", "straight"} };
+  vector <vector<string>>options = { {"right"}, {"left", "right"}, {"left"} };
   //options[d] will give possible directions that the car can go to
   
-  // Creating vectors to store the possible values of lane that the car can stay in and the cost for each: 
   vector <int> lane_val;
   vector <double> cost_lane;
   
@@ -171,57 +169,38 @@ int behaviour_planner( vector<vector<double>> sensor_fusion, int prev_size, int 
    // iterating over each direction
     
    string direction = options[ego_lane][i];
-   int target_lane;    //resulting lane when the car moves in that direction
+   int new_lane;    //resulting lane when the car moves in that direction
     
    if(direction=="left"){
-     target_lane = ego_lane-1;
+     new_lane = ego_lane-1;
    }
    else if (direction=="right") {
-     target_lane = ego_lane+1;
-   }
-   else if (direction=="straight") {
-     target_lane = ego_lane;
+     new_lane = ego_lane+1;
    }
     
    double del_s_back = 6000;   // Difference in s value of ego vehicle and vehicle behind 
    double del_s_front = 6000;  // Difference in s value of ego vehicle and vehicle in front  
-   // Initializing the above two variables with large values as we want to find the minima later 
-
-   bool possible = true; // This will be toggled to false whenever a direction become infeasible
     
-   for(int i =0; i< sensor_fusion.size(); i++)
-   {
-     // looping over all the vehicles to check: 1) feasibility 2)Calculation of distance with ego vehicle
-     
-     //Restricting the cars to be analysed
-     double check_car_s = sensor_fusion[i][5];
-     if ( abs(check_car_s - ego_s) > 150 ){
-      continue; 
-      // If the cars are more than 150 m away from the ego vehicle, we don't analyze them 
-     }
+   bool possible = true; 
+    
+   for(int i =0; i< sensor_fusion.size(); i++){
      
      float d = sensor_fusion[i][6];
-     
-     // Considering the cars in the lane under consideration:
-     if(d < (2+4*target_lane+2) && d > (2+4*target_lane-2) )
-     {
+     if(d < (2+4*new_lane+2) && d > (2+4*new_lane-2) ){
      
        double vx = sensor_fusion[i][3];
        double vy = sensor_fusion[i][4];
        double check_speed = sqrt( pow(vx,2) + pow(vy,2) );
-       
+       double check_car_s = sensor_fusion[i][5];
+
        //Assuming that all cars will move with constant velocity in their lane till the time our ego vehicle comes previous points
        check_car_s+=((double)prev_size*0.02*check_speed); //if using previous points can preoject s value out
-              
-       // Now checking for the gap in the lane where we want to go 
-       // If a vehicle present don't consider that option to change lane for that iteration
-       if (target_lane != ego_lane)
-       {
-         // If the traffic car is in the window of 40m bheind & 30m ahead, don't go to that lane
-         if((check_car_s > ego_prev_path_end_s-40) && (check_car_s < ego_prev_path_end_s+30)){
-           bool possible = false; 
-           break;
-         }
+       // check s values greater than mine and s gap 
+
+       if((check_car_s > ego_prev_path_end_s-20) && (check_car_s < ego_prev_path_end_s+20)){
+         bool possible = false; 
+         break;
+         
        }
        
        double difference_s = check_car_s - ego_prev_path_end_s;
@@ -229,15 +208,16 @@ int behaviour_planner( vector<vector<double>> sensor_fusion, int prev_size, int 
        if ( (difference_s>0) && (difference_s < del_s_front) ){
          del_s_front = difference_s;
        }
+       else if ( (difference_s<0) && (fabs(difference_s) < del_s_back) )  {
+         del_s_back = fabs(difference_s);
+       }
 
-     } // if condition closes for vehicle ??
-     
+     } // if condition closes for vehicle 
    } //loop closes which iterates over all vehicles
 
-   // the direction is feasible (This would include the direction "straight")
    if (possible){
-     lane_val.push_back(target_lane);
-     cost_lane.push_back( exp(-1*(del_s_front - 30)) );
+     lane_val.push_back(new_lane);
+     cost_lane.push_back( (exp(-1*(del_s_front - 20))) + (exp(-1*(del_s_back - 10))) );
    }
     
   }//loop closes for each direction
@@ -245,8 +225,16 @@ int behaviour_planner( vector<vector<double>> sensor_fusion, int prev_size, int 
   //cout<<"options[ego_lane] "<<options[ego_lane]<<endl;
   //cout<<"lane_val.size() "<<lane_val.size()<<endl;
   
-  int minElementIndex = std::min_element(cost_lane.begin(), cost_lane.end()) - cost_lane.begin(); 
-  return lane_val[minElementIndex];
+  if (lane_val.size() == 0) 
+    { return ego_lane; }
+
+  else if (lane_val.size() == 1)
+    { return lane_val[0]; }
+
+  else{
+   int minElementIndex = std::min_element(cost_lane.begin(), cost_lane.end()) - cost_lane.begin(); 
+   return lane_val[minElementIndex];
+   }
   
 }
 
