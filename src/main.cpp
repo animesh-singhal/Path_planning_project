@@ -59,13 +59,13 @@ int main() {
 
   double ref_vel = 0; //mph
   
-  bool lane_change_last_time = false;
+  
    
   //Note: After declaring these variables, we've added them in h.onMessage (notice &ref_vel, &lane)
   
   
   h.onMessage([&ref_vel, &map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
-               &map_waypoints_dx,&map_waypoints_dy, &lane, &lane_change_last_time]
+               &map_waypoints_dx,&map_waypoints_dy, &lane]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -107,6 +107,8 @@ int main() {
           //Last path the car was following. Simulator will tell us what the previous path was. 
           int prev_size = previous_path_x.size();
           
+          bool lane_change_last_time = false;
+          
           // ----END OF DECLARATIONS  
           
           
@@ -119,6 +121,8 @@ int main() {
           
           //////////////////////////////////////////////// START OF CODE TO AVOID COLLISION 
 
+          double car_s_present = car_s; //will be used to feed in function as parameter
+          
           if(prev_size > 0)
           {
             car_s = end_path_s; 
@@ -142,7 +146,7 @@ int main() {
               // check s values greater than mine and s gap 
               if((check_car_s > car_s) && ((check_car_s-car_s) <30) )
               {
-                
+                //Bracket A
                 
                 // Do some logic here, lower reference velocity so we don't crash into the car infront of us 
                 // could also flag to try to change lanes
@@ -155,11 +159,11 @@ int main() {
 
                 // behaviour_planner function is defined in helper.h (at the bottom) 
                 if (lane_change_last_time == false){
-                new_lane = behaviour_planner( sensor_fusion, prev_size, lane, car_s, end_path_s);
+                new_lane = behaviour_planner( sensor_fusion, prev_size, lane, car_s_present, end_path_s);
                 
                   if (new_lane != lane){
                    lane = new_lane;
-                   bool lane_change_last_time = true;   
+                   lane_change_last_time = true;   
                   }
 
                 }
@@ -168,11 +172,40 @@ int main() {
                 
               }
               
-            }
+            }// End of Bracket A
+            
+            else {
+            //Bracket B opens up  
+         
+            // Even if any vehicle is not too close to ego vehicle, it would be nice to come to the middle lane
+
+            //If you're NOT in the middle lane, try to see if you can move to the middle lane:
+              
+              if(lane != 1){  //Bracket C opens
+                
+                int new_lane = -1; //randomly intiializing new lane (as 0 corresponds to left lane)
+                
+                if (lane_change_last_time == false){
+                new_lane = behaviour_planner( sensor_fusion, prev_size, lane, car_s_present, end_path_s);
+                
+                  if (new_lane != lane){
+                   lane = new_lane;
+                   lane_change_last_time = true;   
+                  }
+
+                }
+                
+              }  //Bracket C closes
+             
+              
+            } //Bracket B closes
+            
           }
           
 		  // If ego is too close to vhehicle in front & is not changing lane
-          if(too_close && (lane_change_last_time == false))
+          bool apply_brake = emergency_brakes( sensor_fusion, lane, car_s_present);
+          
+          if( (too_close && (lane_change_last_time == false)) || apply_brake )
           {
             ref_vel -= .224;
             //cout<<"ref_vel A"<<ref_vel<<endl;
@@ -183,6 +216,7 @@ int main() {
             //cout<<"ref_vel B"<<ref_vel<<endl;
           }
           
+            
           //////////////////////////////////////////////// END OF CODE TO AVOID COLLISION 
           
           
