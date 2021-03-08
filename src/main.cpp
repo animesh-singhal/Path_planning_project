@@ -59,7 +59,7 @@ int main() {
 
   double ref_vel = 0; //mph
   
-  
+ 
    
   //Note: After declaring these variables, we've added them in h.onMessage (notice &ref_vel, &lane)
   
@@ -295,8 +295,6 @@ int main() {
           //Now we want to shift the frame of reference to car's reference coordinates (ref_x, ref_y, ref_yaw)
           for (int i=0; i< ptsx.size(); i++)
           {
-          
-            //shift car reference angle to 0 degrees
             double shift_x = ptsx[i]-ref_x;
             double shift_y = ptsy[i]-ref_y;
             
